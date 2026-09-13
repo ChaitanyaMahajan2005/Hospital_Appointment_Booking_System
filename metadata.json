@@ -1,0 +1,7 @@
+{
+  "name": "M. Y. Hospital",
+  "description": "Modern hospital web portal for M. Y. Hospital featuring clinical departments, specialist doctor directories, and interactive appointment booking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
