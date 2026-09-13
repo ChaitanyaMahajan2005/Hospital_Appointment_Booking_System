@@ -1,4 +1,4 @@
-export type Page = 'home' | 'about' | 'departments' | 'doctors' | 'book-appointment';
+export type Page = 'home' | 'about' | 'departments' | 'doctors' | 'book-appointment' | 'admin';
 
 export interface Department {
   id: string;
@@ -41,8 +41,17 @@ export interface Doctor {
   roomLocation: string;
 }
 
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  phone?: string;
+  createdAt: string;
+}
+
 export interface Appointment {
   id: string;
+  userId?: string;
   patientName: string;
   patientEmail: string;
   patientPhone: string;

@@ -19,9 +19,15 @@ import {
   CalendarCheck,
   Award,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  ShieldCheck,
+  LogIn,
+  Download,
+  Check
 } from 'lucide-react';
 import { DynamicIcon } from './DynamicIcon';
+import { useAuth } from '../context/AuthContext';
+import { downloadAppointmentSlip, printAppointmentSlip } from '../utils/appointmentSlip';
 
 interface AppointmentBookingModalProps {
   isOpen: boolean;
@@ -42,6 +48,8 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   preselectedDepartmentId,
   onAppointmentBooked,
 }) => {
+  const { currentUser, userProfile, openAuthModal } = useAuth();
+
   // Form State
   const [selectedDeptId, setSelectedDeptId] = useState<string>('');
   const [selectedDocId, setSelectedDocId] = useState<string>('');
@@ -61,6 +69,22 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   const [step, setStep] = useState<1 | 2 | 3>(1); // 1: Dept/Doc & Time, 2: Patient Info, 3: Success Slip
   const [confirmedAppointment, setConfirmedAppointment] = useState<Appointment | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [downloadedSlip, setDownloadedSlip] = useState(false);
+
+  // Auto-fill from authenticated user profile when modal opens
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      if (!patientName && (userProfile?.displayName || currentUser.displayName)) {
+        setPatientName(userProfile?.displayName || currentUser.displayName || '');
+      }
+      if (!patientEmail && currentUser.email) {
+        setPatientEmail(currentUser.email);
+      }
+      if (!patientPhone && userProfile?.phone) {
+        setPatientPhone(userProfile.phone);
+      }
+    }
+  }, [isOpen, currentUser?.uid]);
 
   // Initialize or reset when modal opens or preselection changes
   useEffect(() => {
@@ -179,6 +203,13 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   // Submit appointment
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!currentUser) {
+      setValidationError('Please sign in or create an account to finalize and save your booking.');
+      openAuthModal('signin');
+      return;
+    }
+
     if (!patientName.trim()) {
       setValidationError('Please enter the patient’s full name.');
       return;
@@ -202,6 +233,7 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
     const newAppointment: Appointment = {
       id: `MYH-${randomSuffix}`,
+      userId: currentUser.uid,
       patientName: patientName.trim(),
       patientEmail: patientEmail.trim(),
       patientPhone: patientPhone.trim(),
@@ -228,7 +260,9 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
   };
 
   const handlePrint = () => {
-    window.print();
+    if (confirmedAppointment) {
+      printAppointmentSlip(confirmedAppointment, currentDoctor?.roomLocation);
+    }
   };
 
   if (!isOpen) return null;
@@ -538,6 +572,44 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
         {/* Step 2: Patient Details Form */}
         {step === 2 && (
           <form onSubmit={handleConfirmBooking} className="p-6 space-y-5">
+            {/* Patient Authentication Status Banner */}
+            {currentUser ? (
+              <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shrink-0">
+                    {(userProfile?.displayName || currentUser.displayName || currentUser.email || 'P').charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-900">
+                      Logged in as {userProfile?.displayName || currentUser.displayName || 'Registered Patient'}
+                    </p>
+                    <p className="text-[11px] text-emerald-700">
+                      {currentUser.email} • Booking will be securely synced to your cloud account
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Account Linked</span>
+                </span>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Sign in is required to book and track your appointments</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAuthModal('signin')}
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Sign In / Register</span>
+                </button>
+              </div>
+            )}
+
             {/* Quick appointment summary banner */}
             <div className="p-3.5 rounded-xl bg-teal-50/80 border border-teal-200 text-xs text-teal-900 flex items-center justify-between flex-wrap gap-2">
               <div>
@@ -820,15 +892,42 @@ export const AppointmentBookingModal: React.FC<AppointmentBookingModalProps> = (
 
             {/* Actions */}
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <button
-                type="button"
-                id="print-appointment-pass-btn"
-                onClick={handlePrint}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-2 cursor-pointer"
-              >
-                <Printer className="w-4 h-4 text-slate-500" />
-                <span>Print Appointment Slip</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  id="download-appointment-pass-btn"
+                  onClick={() => {
+                    if (confirmedAppointment) {
+                      downloadAppointmentSlip(confirmedAppointment, currentDoctor?.roomLocation);
+                      setDownloadedSlip(true);
+                      setTimeout(() => setDownloadedSlip(false), 3000);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 active:bg-teal-200 border border-teal-300 text-teal-800 text-xs font-bold flex items-center gap-2 cursor-pointer transition-colors shadow-xs"
+                >
+                  {downloadedSlip ? (
+                    <>
+                      <Check className="w-4 h-4 text-teal-600" />
+                      <span>Slip Downloaded!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 text-teal-700" />
+                      <span>Download Slip</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  id="print-appointment-pass-btn"
+                  onClick={handlePrint}
+                  className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                >
+                  <Printer className="w-4 h-4 text-slate-500" />
+                  <span>Print Slip</span>
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button

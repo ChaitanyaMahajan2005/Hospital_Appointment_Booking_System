@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Page, Department, Doctor, Appointment } from './types';
 import { DEPARTMENTS, DOCTORS, INITIAL_APPOINTMENTS } from './data/hospitalData';
 import { Navbar } from './components/Navbar';
@@ -12,17 +12,27 @@ import { HomePage } from './pages/HomePage';
 import { AboutPage } from './pages/AboutPage';
 import { DepartmentsPage } from './pages/DepartmentsPage';
 import { DoctorsPage } from './pages/DoctorsPage';
+import { AdminPage } from './pages/AdminPage';
 import { AppointmentBookingModal } from './components/AppointmentBookingModal';
 import { DoctorDetailModal } from './components/DoctorDetailModal';
 import { DepartmentDetailModal } from './components/DepartmentDetailModal';
 import { MyAppointmentsModal } from './components/MyAppointmentsModal';
 import { EmergencyModal } from './components/EmergencyModal';
+import { AuthModal } from './components/AuthModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import {
+  saveAppointmentToFirestore,
+  cancelAppointmentInFirestore,
+  subscribeUserAppointments,
+  subscribeAllAppointments,
+} from './lib/firebase';
 import { CheckCircle2, PhoneCall, Calendar, ShieldAlert } from 'lucide-react';
 
 const STORAGE_KEY = 'my_hospital_appointments_v1';
 const LEGACY_STORAGE_KEY = 'medisquare_hospital_appointments_v1';
 
-export default function App() {
+function HospitalApp() {
+  const { currentUser, isAdmin, openAuthModal } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [departments] = useState<Department[]>(DEPARTMENTS);
   const [doctors] = useState<Doctor[]>(DOCTORS);
@@ -40,6 +50,50 @@ export default function App() {
     return INITIAL_APPOINTMENTS;
   });
 
+  // Subscribe to real-time appointments from Firestore:
+  // If user is Admin -> subscribe to ALL hospital appointments
+  // If user is regular patient -> subscribe to their own appointments
+  // If not logged in -> use localStorage / INITIAL_APPOINTMENTS
+  useEffect(() => {
+    if (!currentUser) {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+        if (saved) {
+          setAppointments(JSON.parse(saved));
+        } else {
+          setAppointments(INITIAL_APPOINTMENTS);
+        }
+      } catch (e) {
+        console.warn('Error reading local appointments:', e);
+      }
+      return;
+    }
+
+    const onData = (cloudAppointments: Appointment[]) => {
+      if (cloudAppointments && cloudAppointments.length > 0) {
+        setAppointments(cloudAppointments);
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudAppointments));
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    const onError = (error: any) => {
+      console.warn('Firestore subscription notice (using local cache):', error?.message);
+    };
+
+    const unsubscribe = isAdmin
+      ? subscribeAllAppointments(onData, onError)
+      : subscribeUserAppointments(currentUser.uid, onData, onError);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.uid, isAdmin]);
+
+  // Sync to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
@@ -68,23 +122,58 @@ export default function App() {
     }, 4500);
   };
 
-  // Open booking modal with optional doctor/dept pre-fill
+  const handleAppointmentUpdated = useCallback((updatedList: Appointment[]) => {
+    setAppointments(updatedList);
+  }, []);
+
+  // Open booking modal with optional doctor/dept pre-fill, gating on auth
   const handleOpenBooking = (doctorId?: string, deptId?: string) => {
+    if (!currentUser) {
+      showToast('Please sign in or register to book your doctor appointment.');
+      openAuthModal('signin', () => {
+        setPreselectedDoctorId(doctorId);
+        setPreselectedDepartmentId(deptId);
+        setBookingModalOpen(true);
+      });
+      return;
+    }
+
     setPreselectedDoctorId(doctorId);
     setPreselectedDepartmentId(deptId);
     setBookingModalOpen(true);
   };
 
-  const handleAppointmentBooked = (newAppointment: Appointment) => {
-    setAppointments((prev) => [newAppointment, ...prev]);
+  const handleAppointmentBooked = async (newAppointment: Appointment) => {
+    // 1. Optimistic update
+    setAppointments((prev) => [newAppointment, ...prev.filter((a) => a.id !== newAppointment.id)]);
     showToast(`Appointment ${newAppointment.id} confirmed for ${newAppointment.patientName}!`);
+
+    // 2. Persist in Firestore if user is authenticated
+    if (currentUser) {
+      try {
+        await saveAppointmentToFirestore({
+          ...newAppointment,
+          userId: currentUser.uid,
+        });
+      } catch (err) {
+        console.error('Failed to sync appointment to Firestore:', err);
+      }
+    }
   };
 
-  const handleCancelAppointment = (appointmentId: string) => {
+  const handleCancelAppointment = async (appointmentId: string) => {
     setAppointments((prev) =>
       prev.map((apt) => (apt.id === appointmentId ? { ...apt, status: 'Cancelled' as const } : apt))
     );
     showToast(`Appointment ${appointmentId} has been cancelled.`);
+
+    if (currentUser) {
+      try {
+        await cancelAppointmentInFirestore(appointmentId);
+      } catch (err) {
+        console.error('Failed to cancel appointment in Firestore:', err);
+      }
+    }
   };
 
   const handleSelectDepartment = (dept: Department) => {
@@ -147,6 +236,18 @@ export default function App() {
             onViewDoctorProfile={handleViewDoctorProfile}
           />
         )}
+
+        {currentPage === 'admin' && (
+          <AdminPage
+            appointments={appointments}
+            departments={departments}
+            doctors={doctors}
+            onNavigateHome={() => setCurrentPage('home')}
+            onAppointmentUpdated={handleAppointmentUpdated}
+            onOpenBooking={() => setBookingModalOpen(true)}
+            showToast={showToast}
+          />
+        )}
       </main>
 
       {/* Hospital Footer */}
@@ -156,7 +257,10 @@ export default function App() {
         onOpenEmergency={() => setEmergencyModalOpen(true)}
       />
 
-      {/* Modals */}
+      {/* Authentication Modal */}
+      <AuthModal />
+
+      {/* Booking & Details Modals */}
       <AppointmentBookingModal
         isOpen={bookingModalOpen}
         onClose={() => setBookingModalOpen(false)}
@@ -238,3 +342,12 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <HospitalApp />
+    </AuthProvider>
+  );
+}
+

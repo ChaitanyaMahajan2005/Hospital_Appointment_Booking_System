@@ -8,12 +8,18 @@ import {
   Menu,
   X,
   ShieldCheck,
+  ShieldAlert,
   Stethoscope,
   HeartPulse,
   UserCheck,
   Building2,
-  Ambulance
+  Ambulance,
+  LogIn,
+  LogOut,
+  User as UserIcon,
+  ChevronDown
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   currentPage: Page;
@@ -33,6 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   appointmentsCount,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const { currentUser, userProfile, isAdmin, logout, openAuthModal } = useAuth();
 
   const navItems: { id: Page; label: string; icon: React.ReactNode }[] = [
     { id: 'home', label: 'Home', icon: <Building2 className="w-4 h-4" /> },
@@ -46,6 +54,8 @@ export const Navbar: React.FC<NavbarProps> = ({
     setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const displayName = userProfile?.displayName || currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Patient';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs">
@@ -86,6 +96,24 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               )}
             </button>
+            <div className="hidden sm:inline-block h-3 w-px bg-slate-700"></div>
+            <button
+              id="top-admin-portal-btn"
+              onClick={() => handleNavClick('admin')}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold transition-colors cursor-pointer text-[11px] ${
+                currentPage === 'admin'
+                  ? 'bg-amber-400 text-slate-950 font-bold shadow-xs'
+                  : isAdmin
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40 hover:bg-amber-500/30'
+                  : 'text-slate-300 hover:text-white hover:bg-slate-800'
+              }`}
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-400" />
+              <span>Admin Portal</span>
+              {isAdmin && (
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -97,7 +125,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <button
             id="nav-logo-btn"
             onClick={() => handleNavClick('home')}
-            className="flex items-center gap-3 text-left group focus:outline-hidden"
+            className="flex items-center gap-3 text-left group focus:outline-hidden cursor-pointer"
           >
             <div className="relative w-11 h-11 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 flex items-center justify-center text-white shadow-md shadow-teal-600/20 group-hover:scale-105 transition-transform duration-200">
               <HeartPulse className="w-6 h-6 stroke-[2.2]" />
@@ -106,16 +134,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 leading-none">
                 <span className="text-xl font-extrabold tracking-tight text-slate-900 font-['Outfit']">
                   M. Y.
                 </span>
                 <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-teal-50 text-teal-700 border border-teal-200/60 uppercase tracking-wider">
-                  Hospital
+                  HOSPITAL
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium tracking-wide">
-                Maharaja Yeshwantrao Multispecialty & Research
+              <p className="text-[11px] sm:text-xs text-slate-600 font-medium tracking-tight leading-tight mt-0.5">
+                Teaching Hospital of MGM Medical College, Indore
+              </p>
+              <p className="text-[9.5px] sm:text-[10px] text-slate-400 font-medium tracking-tight leading-tight mt-0.5">
+                Since 1955 • A Historic Healthcare Landmark
               </p>
             </div>
           </button>
@@ -144,7 +175,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             })}
           </nav>
 
-          {/* Right Action CTA */}
+          {/* Right Action CTA & Auth */}
           <div className="hidden sm:flex items-center gap-3">
             <button
               id="header-call-doc-btn"
@@ -155,6 +186,86 @@ export const Navbar: React.FC<NavbarProps> = ({
               <PhoneCall className="w-4 h-4 text-red-500" />
               <span className="hidden md:inline">Helpline</span>
             </button>
+
+            {/* Auth Button or User Profile Pill */}
+            {currentUser ? (
+              <div className="relative">
+                <button
+                  id="user-profile-menu-btn"
+                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
+                  className="px-3 py-2 rounded-lg border border-teal-200 bg-teal-50/70 hover:bg-teal-100/70 text-teal-900 text-sm font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                >
+                  <div className="w-6 h-6 rounded-full bg-teal-600 text-white text-xs flex items-center justify-center font-bold">
+                    {displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="max-w-[120px] truncate">{displayName}</span>
+                  <ChevronDown className="w-3.5 h-3.5 text-teal-600" />
+                </button>
+
+                {userDropdownOpen && (
+                  <div
+                    id="user-profile-dropdown"
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-2 z-50 animate-in fade-in zoom-in-95 duration-150"
+                  >
+                    <div className="px-3 py-2.5 border-b border-slate-100">
+                      <p className="text-xs font-bold text-slate-900 truncate">{displayName}</p>
+                      <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+                      {userProfile?.phone && (
+                        <p className="text-[10px] text-teal-700 mt-0.5 font-medium">{userProfile.phone}</p>
+                      )}
+                    </div>
+                    <div className="py-1">
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenAppointments();
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 rounded-lg flex items-center gap-2 cursor-pointer"
+                      >
+                        <UserCheck className="w-3.5 h-3.5 text-teal-600" />
+                        <span>My Appointments</span>
+                        {appointmentsCount > 0 && (
+                          <span className="ml-auto px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-800 text-[10px] font-bold">
+                            {appointmentsCount}
+                          </span>
+                        )}
+                      </button>
+                      <button
+                        id="user-dropdown-admin-portal-btn"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          handleNavClick('admin');
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-semibold text-amber-900 bg-amber-50/70 hover:bg-amber-100/70 rounded-lg flex items-center gap-2 cursor-pointer my-0.5 transition-colors"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Admin Portal {isAdmin && '(Unlocked)'}</span>
+                      </button>
+                      <button
+                        id="user-signout-btn"
+                        onClick={async () => {
+                          setUserDropdownOpen(false);
+                          await logout();
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sign Out</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <button
+                id="header-signin-btn"
+                onClick={() => openAuthModal('signin')}
+                className="px-3.5 py-2 rounded-lg border border-slate-300 hover:border-teal-500 bg-white hover:bg-teal-50/50 text-slate-700 hover:text-teal-700 text-sm font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 text-teal-600" />
+                <span>Sign In</span>
+              </button>
+            )}
 
             <button
               id="header-book-appointment-btn"
@@ -168,6 +279,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile Hamburger Menu Button */}
           <div className="flex items-center gap-2 lg:hidden">
+            {!currentUser && (
+              <button
+                id="mobile-header-signin-btn"
+                onClick={() => openAuthModal('signin')}
+                className="p-2 rounded-lg border border-slate-200 text-teal-700 hover:bg-slate-50 transition-colors text-xs font-semibold flex items-center gap-1"
+              >
+                <LogIn className="w-4 h-4" />
+                <span>Sign In</span>
+              </button>
+            )}
+
             <button
               id="mobile-book-icon-btn"
               onClick={() => onOpenBooking()}
@@ -192,6 +314,29 @@ export const Navbar: React.FC<NavbarProps> = ({
       {/* Mobile Dropdown Menu */}
       {mobileMenuOpen && (
         <div className="lg:hidden border-t border-slate-200 bg-white px-4 pt-3 pb-6 space-y-2 shadow-xl animate-in fade-in duration-150">
+          {currentUser && (
+            <div className="p-3 bg-teal-50/80 rounded-xl border border-teal-100 flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-bold flex items-center justify-center text-xs">
+                  {displayName.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-900">{displayName}</p>
+                  <p className="text-[11px] text-slate-500">{currentUser.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  await logout();
+                  setMobileMenuOpen(false);
+                }}
+                className="px-2.5 py-1 text-[11px] font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-md transition-colors"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+
           <div className="space-y-1">
             {navItems.map((item) => {
               const isActive = currentPage === item.id;
@@ -216,6 +361,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           <div className="pt-3 border-t border-slate-100 space-y-2">
+            {!currentUser && (
+              <button
+                id="mobile-nav-signin-btn"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  openAuthModal('signin');
+                }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-slate-300 text-slate-700 font-semibold text-sm hover:bg-slate-50"
+              >
+                <LogIn className="w-4 h-4 text-teal-600" />
+                <span>Patient Sign In / Register</span>
+              </button>
+            )}
+
             <button
               id="mobile-nav-book-appointment-btn"
               onClick={() => {
@@ -253,9 +412,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span>Emergency 24/7</span>
               </button>
             </div>
+
+            <button
+              id="mobile-nav-admin-btn"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                handleNavClick('admin');
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 font-bold text-xs transition-colors cursor-pointer"
+            >
+              <ShieldAlert className="w-3.5 h-3.5 text-amber-600" />
+              <span>Admin Portal {isAdmin && '(Unlocked)'}</span>
+            </button>
           </div>
         </div>
       )}
     </header>
   );
 };
+

@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered patient user profile",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "displayName": { "type": "string", "description": "Patient full name" },
+        "email": { "type": "string", "description": "Patient email address" },
+        "phone": { "type": "string", "description": "Patient contact number" },
+        "createdAt": { "type": "string", "description": "Account registration timestamp" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Appointment": {
+      "title": "Appointment",
+      "description": "Hospital appointment booking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique appointment identifier" },
+        "userId": { "type": "string", "description": "Booking user Auth UID" },
+        "patientName": { "type": "string", "description": "Name of patient" },
+        "patientEmail": { "type": "string", "description": "Email of patient" },
+        "patientPhone": { "type": "string", "description": "Phone number of patient" },
+        "patientAge": { "type": "number", "description": "Patient age in years" },
+        "patientGender": { "type": "string", "enum": ["Male", "Female", "Other"] },
+        "departmentId": { "type": "string", "description": "Clinical department ID" },
+        "departmentName": { "type": "string", "description": "Clinical department name" },
+        "doctorId": { "type": "string", "description": "Assigned doctor ID" },
+        "doctorName": { "type": "string", "description": "Assigned doctor name" },
+        "doctorSpecialty": { "type": "string", "description": "Doctor specialty field" },
+        "appointmentDate": { "type": "string", "description": "Appointment date YYYY-MM-DD" },
+        "appointmentTime": { "type": "string", "description": "Appointment time slot" },
+        "visitType": { "type": "string", "description": "Type of hospital consultation" },
+        "symptoms": { "type": "string", "description": "Patient symptoms or reason for visit" },
+        "status": { "type": "string", "enum": ["Confirmed", "Completed", "Cancelled"] },
+        "createdAt": { "type": "string", "description": "Booking creation ISO timestamp" },
+        "tokenNumber": { "type": "string", "description": "Queue token number" }
+      },
+      "required": [
+        "id",
+        "userId",
+        "patientName",
+        "patientEmail",
+        "patientPhone",
+        "departmentId",
+        "doctorId",
+        "appointmentDate",
+        "appointmentTime",
+        "status"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection"
+    },
+    "/appointments/{appointmentId}": {
+      "schema": { "$ref": "#/entities/Appointment" },
+      "description": "Hospital appointment bookings"
+    }
+  }
+}
