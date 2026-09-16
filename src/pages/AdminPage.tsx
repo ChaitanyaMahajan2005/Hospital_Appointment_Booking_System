@@ -29,15 +29,20 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  Stethoscope
+  Stethoscope,
+  Award
 } from 'lucide-react';
 import {
   updateAppointmentStatusInFirestore,
   deleteAppointmentFromFirestore,
+  updateDoctorStatusInFirestore,
   ADMIN_EMAIL
 } from '../lib/firebase';
 import { downloadAppointmentSlip, printAppointmentSlip } from '../utils/appointmentSlip';
 import { AdminAddBookingModal } from '../components/AdminAddBookingModal';
+import { AdminAddDoctorModal } from '../components/AdminAddDoctorModal';
+import { AdminEditDoctorModal } from '../components/AdminEditDoctorModal';
+import { DoctorDetailModal } from '../components/DoctorDetailModal';
 
 interface AdminPageProps {
   appointments: Appointment[];
@@ -45,6 +50,8 @@ interface AdminPageProps {
   doctors: Doctor[];
   onNavigateHome: () => void;
   onAppointmentUpdated: (updatedAppointments: Appointment[]) => void;
+  onDoctorAdded?: (doctor: Doctor) => void;
+  onDoctorUpdated?: (doctor: Doctor) => void;
   onOpenBooking: () => void;
   showToast: (msg: string) => void;
 }
@@ -55,21 +62,45 @@ export const AdminPage: React.FC<AdminPageProps> = ({
   doctors,
   onNavigateHome,
   onAppointmentUpdated,
+  onDoctorAdded,
+  onDoctorUpdated,
   showToast,
 }) => {
   const { currentUser, isAdmin, loginWithEmail, logout } = useAuth();
 
-  // Login form state
-  const [emailInput, setEmailInput] = useState(ADMIN_EMAIL);
-  const [passwordInput, setPasswordInput] = useState('123456');
+  // Login form state - clean and secure (NO hardcoded credentials or autofill)
+  const [emailInput, setEmailInput] = useState('');
+  const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // Active Admin Section Tab: Appointments vs Doctors Management
+  const [adminTab, setAdminTab] = useState<'appointments' | 'doctors'>('appointments');
+
   // Admin action modal states
   const [addBookingModalOpen, setAddBookingModalOpen] = useState(false);
+  const [addDoctorModalOpen, setAddDoctorModalOpen] = useState(false);
+  const [editingDoctor, setEditingDoctor] = useState<Doctor | null>(null);
+  const [activeDoctorDetail, setActiveDoctorDetail] = useState<Doctor | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Toggle Doctor Active/Inactive status
+  const handleToggleDoctorStatus = async (doc: Doctor) => {
+    const nextStatus = doc.status === 'inactive' ? 'active' : 'inactive';
+    try {
+      await updateDoctorStatusInFirestore(doc.id, nextStatus);
+      const updated = { ...doc, status: nextStatus };
+      if (onDoctorUpdated) {
+        onDoctorUpdated(updated);
+      }
+      showToast(`Doctor Dr. ${doc.name.replace(/^Dr\.\s*/, '')} status updated to ${nextStatus}.`);
+    } catch (err: any) {
+      console.error('Error toggling doctor status:', err);
+      showToast(err?.message || 'Failed to update doctor status.');
+    }
+  };
 
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,12 +128,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({
     } finally {
       setIsLoggingIn(false);
     }
-  };
-
-  const handleAutofillCredentials = () => {
-    setEmailInput(ADMIN_EMAIL);
-    setPasswordInput('123456');
-    setLoginError(null);
   };
 
   // Status Change Handler
@@ -312,27 +337,6 @@ export const AdminPage: React.FC<AdminPageProps> = ({
               </div>
             )}
 
-            {/* Autofill Demo Credentials Card */}
-            <div className="mb-5 p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
-              <div className="text-xs">
-                <span className="font-bold text-slate-700 block text-[11px] uppercase tracking-wide">
-                  Admin Credentials:
-                </span>
-                <span className="text-teal-800 font-mono font-semibold block text-xs">
-                  {ADMIN_EMAIL}
-                </span>
-                <span className="text-slate-500 font-mono text-[11px]">Pass: 123456</span>
-              </div>
-              <button
-                type="button"
-                id="autofill-admin-btn"
-                onClick={handleAutofillCredentials}
-                className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 font-bold text-xs cursor-pointer transition-colors shadow-xs shrink-0"
-              >
-                Autofill
-              </button>
-            </div>
-
             {/* Error Message */}
             {loginError && (
               <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
@@ -454,12 +458,22 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
-                id="admin-open-add-booking-btn"
-                onClick={() => setAddBookingModalOpen(true)}
+                id="admin-open-add-doctor-btn"
+                onClick={() => setAddDoctorModalOpen(true)}
                 className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 active:bg-teal-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-md shadow-teal-600/20 transition-all"
               >
+                <Stethoscope className="w-4 h-4" />
+                <span>Add Doctor Account</span>
+              </button>
+
+              <button
+                type="button"
+                id="admin-open-add-booking-btn"
+                onClick={() => setAddBookingModalOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer transition-all"
+              >
                 <PlusCircle className="w-4 h-4" />
-                <span>Add New Booking</span>
+                <span>Add Booking</span>
               </button>
 
               <button
@@ -502,6 +516,174 @@ export const AdminPage: React.FC<AdminPageProps> = ({
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+        {/* Navigation Tabs: Appointments vs Doctor Management */}
+        <div className="flex items-center gap-2 mb-6 border-b border-slate-200 pb-3">
+          <button
+            type="button"
+            id="admin-tab-appointments"
+            onClick={() => setAdminTab('appointments')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              adminTab === 'appointments'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5 text-teal-400" />
+            <span>Patient Bookings ({appointments.length})</span>
+          </button>
+          <button
+            type="button"
+            id="admin-tab-doctors"
+            onClick={() => setAdminTab('doctors')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              adminTab === 'doctors'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+            }`}
+          >
+            <Stethoscope className="w-3.5 h-3.5 text-teal-400" />
+            <span>Doctors Directory & Accounts ({doctors.length})</span>
+          </button>
+        </div>
+
+        {adminTab === 'doctors' ? (
+          /* Doctors Directory and Accounts Management View */
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 font-['Outfit'] flex items-center gap-2">
+                  <Stethoscope className="w-5 h-5 text-teal-600" />
+                  <span>Hospital Doctor Accounts & Directory</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Manage medical staff profiles and provision access to the Doctor Workstation Portal
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAddDoctorModalOpen(true)}
+                className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer shadow-xs"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Register New Doctor</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {doctors.map((doc) => {
+                const docApts = appointments.filter(
+                  (a) => a.doctorId === doc.id || a.doctorName.includes(doc.name.replace('Dr.', '').trim())
+                );
+                return (
+                  <div
+                    key={doc.id}
+                    className={`bg-white rounded-2xl border p-5 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between ${
+                      doc.status === 'inactive' ? 'border-amber-200 bg-amber-50/10' : 'border-slate-200'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={doc.photoUrl}
+                            alt={doc.name}
+                            className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                          />
+                          <div>
+                            <h4 className="font-bold text-sm text-slate-900">{doc.name}</h4>
+                            <p className="text-xs text-teal-700 font-semibold">{doc.title}</p>
+                            <p className="text-[11px] text-slate-500">{doc.departmentName}</p>
+                          </div>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            doc.status === 'inactive'
+                              ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          {doc.status === 'inactive' ? 'Inactive' : 'Active'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-1.5 py-3 border-y border-slate-100 text-xs">
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Specialty:</span>
+                          <span className="font-medium text-slate-800">{doc.specialty}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Qualifications:</span>
+                          <span className="font-medium text-slate-800">{doc.qualification || doc.degrees?.join(', ') || 'MBBS, MD'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">OPD Location:</span>
+                          <span className="font-medium text-slate-800">{doc.roomLocation || 'OPD Chambers'}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Portal Email:</span>
+                          <span className="font-mono text-[11px] text-teal-800">
+                            {doc.email || 'doctor@myhospital.org'}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-slate-600">
+                          <span className="text-slate-400">Schedule:</span>
+                          <span className="font-medium text-slate-800 text-[11px]">{doc.availabilityText || 'Mon - Sat'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[11px] text-slate-500 font-medium">
+                          <strong>{docApts.length}</strong> assigned bookings
+                        </span>
+                        <span className="text-[10px] font-mono text-slate-400">
+                          ID: {doc.id}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-1.5 pt-1">
+                        {/* Toggle Status Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDoctorStatus(doc)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                            doc.status === 'inactive'
+                              ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
+                              : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+                          }`}
+                          title={doc.status === 'inactive' ? 'Activate doctor' : 'Pause doctor from bookings'}
+                        >
+                          {doc.status === 'inactive' ? 'Activate' : 'Deactivate'}
+                        </button>
+
+                        {/* Edit Doctor Profile Button */}
+                        <button
+                          type="button"
+                          onClick={() => setEditingDoctor(doc)}
+                          className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Edit Profile
+                        </button>
+
+                        {/* View Details Modal */}
+                        <button
+                          type="button"
+                          onClick={() => setActiveDoctorDetail(doc)}
+                          className="px-2.5 py-1 rounded-lg bg-teal-50 border border-teal-200 text-teal-800 hover:bg-teal-100 text-[11px] font-semibold cursor-pointer"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* Bookings Tab Content */
+          <>
         {/* Metric Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5 mb-6">
           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
@@ -894,6 +1076,8 @@ export const AdminPage: React.FC<AdminPageProps> = ({
             </div>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Admin Add Booking Modal */}
@@ -903,6 +1087,40 @@ export const AdminPage: React.FC<AdminPageProps> = ({
         departments={departments}
         doctors={doctors}
         onAddBooking={handleAddBookingFromAdmin}
+      />
+
+      {/* Admin Add Doctor Modal */}
+      <AdminAddDoctorModal
+        isOpen={addDoctorModalOpen}
+        onClose={() => setAddDoctorModalOpen(false)}
+        departments={departments}
+        onDoctorCreated={(newDoc) => {
+          if (onDoctorAdded) {
+            onDoctorAdded(newDoc);
+          }
+          showToast(`Doctor Dr. ${newDoc.name.replace(/^Dr\.\s*/, '')} registered and provisioned.`);
+        }}
+      />
+
+      {/* Admin Edit Doctor Modal */}
+      <AdminEditDoctorModal
+        isOpen={!!editingDoctor}
+        doctor={editingDoctor}
+        departments={departments}
+        onClose={() => setEditingDoctor(null)}
+        onDoctorUpdated={(updatedDoc) => {
+          if (onDoctorUpdated) {
+            onDoctorUpdated(updatedDoc);
+          }
+          showToast(`Doctor Dr. ${updatedDoc.name.replace(/^Dr\.\s*/, '')} profile updated.`);
+        }}
+      />
+
+      {/* Doctor Detail Inspection Modal */}
+      <DoctorDetailModal
+        doctor={activeDoctorDetail}
+        onClose={() => setActiveDoctorDetail(null)}
+        onBook={() => {}}
       />
     </div>
   );

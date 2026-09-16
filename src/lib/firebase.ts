@@ -26,7 +26,7 @@ import {
   Unsubscribe,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Appointment, UserProfile } from '../types';
+import { Appointment, UserProfile, Doctor } from '../types';
 
 export const ADMIN_EMAIL = 'cmahajan328@gmail.com';
 
@@ -98,13 +98,19 @@ export async function testConnection() {
 export async function saveUserProfile(profile: UserProfile): Promise<void> {
   const path = `users/${profile.uid}`;
   try {
-    await setDoc(doc(db, 'users', profile.uid), {
+    const dataToSave: Record<string, any> = {
       uid: profile.uid,
       displayName: profile.displayName || '',
       email: profile.email || '',
       phone: profile.phone || '',
+      role: profile.role || 'patient',
       createdAt: profile.createdAt || new Date().toISOString(),
-    }, { merge: true });
+    };
+    if (profile.doctorId) dataToSave.doctorId = profile.doctorId;
+    if (profile.specialization) dataToSave.specialization = profile.specialization;
+    if (profile.status) dataToSave.status = profile.status;
+
+    await setDoc(doc(db, 'users', profile.uid), dataToSave, { merge: true });
   } catch (err: any) {
     if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
       console.warn('Firestore profile write notice (cached locally):', err?.message);
@@ -131,6 +137,100 @@ export async function getUserProfile(uid: string): Promise<UserProfile | null> {
   }
 }
 
+// Doctor Management in Firestore
+export async function saveDoctorToFirestore(doctor: Doctor): Promise<void> {
+  const path = `doctors/${doctor.id}`;
+  try {
+    await setDoc(doc(db, 'doctors', doctor.id), {
+      ...doctor,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      console.warn('Firestore doctor write notice (cached locally):', err?.message);
+      return;
+    }
+    handleFirestoreError(err, OperationType.WRITE, path);
+  }
+}
+
+export async function updateDoctorStatusInFirestore(
+  doctorId: string,
+  status: 'active' | 'inactive'
+): Promise<void> {
+  const path = `doctors/${doctorId}`;
+  try {
+    await updateDoc(doc(db, 'doctors', doctorId), {
+      status,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      console.warn('Firestore doctor status notice:', err?.message);
+      return;
+    }
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
+export async function updateDoctorProfileInFirestore(
+  doctorId: string,
+  updates: Partial<Doctor>
+): Promise<void> {
+  const path = `doctors/${doctorId}`;
+  try {
+    await updateDoc(doc(db, 'doctors', doctorId), {
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      console.warn('Firestore doctor update notice:', err?.message);
+      return;
+    }
+    handleFirestoreError(err, OperationType.UPDATE, path);
+  }
+}
+
+export async function getDoctorFromFirestore(doctorId: string): Promise<Doctor | null> {
+  const path = `doctors/${doctorId}`;
+  try {
+    const snap = await getDoc(doc(db, 'doctors', doctorId));
+    if (snap.exists()) {
+      return snap.data() as Doctor;
+    }
+    return null;
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
+      return null;
+    }
+    handleFirestoreError(err, OperationType.GET, path);
+  }
+}
+
+export function subscribeDoctors(
+  onData: (doctors: Doctor[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const path = 'doctors';
+  const q = collection(db, 'doctors');
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: Doctor[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as Doctor);
+      });
+      onData(list);
+    },
+    (error: any) => {
+      console.warn('Doctors collection snapshot notice:', error?.message);
+      if (onError) onError(error);
+    }
+  );
+}
+
 // Appointment management
 export async function saveAppointmentToFirestore(appointment: Appointment): Promise<void> {
   const path = `appointments/${appointment.id}`;
@@ -153,6 +253,7 @@ export async function cancelAppointmentInFirestore(appointmentId: string): Promi
   try {
     await updateDoc(doc(db, 'appointments', appointmentId), {
       status: 'Cancelled',
+      updatedAt: new Date().toISOString(),
     });
   } catch (err: any) {
     if (err?.code === 'permission-denied' || err?.message?.includes('insufficient permissions')) {
@@ -165,7 +266,7 @@ export async function cancelAppointmentInFirestore(appointmentId: string): Promi
 
 export async function updateAppointmentStatusInFirestore(
   appointmentId: string,
-  status: 'Confirmed' | 'Completed' | 'Cancelled'
+  status: 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'Rejected'
 ): Promise<void> {
   const path = `appointments/${appointmentId}`;
   try {
@@ -193,6 +294,34 @@ export async function deleteAppointmentFromFirestore(appointmentId: string): Pro
     }
     handleFirestoreError(err, OperationType.WRITE, path);
   }
+}
+
+export function subscribeDoctorAppointments(
+  doctorId: string,
+  onData: (appointments: Appointment[]) => void,
+  onError?: (err: Error) => void
+): Unsubscribe {
+  const path = 'appointments';
+  const q = query(
+    collection(db, 'appointments'),
+    where('doctorId', '==', doctorId)
+  );
+
+  return onSnapshot(
+    q,
+    (snapshot) => {
+      const list: Appointment[] = [];
+      snapshot.forEach((d) => {
+        list.push(d.data() as Appointment);
+      });
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      onData(list);
+    },
+    (error: any) => {
+      console.warn('Doctor appointments snapshot notice:', error?.message);
+      if (onError) onError(error);
+    }
+  );
 }
 
 export function subscribeAllAppointments(

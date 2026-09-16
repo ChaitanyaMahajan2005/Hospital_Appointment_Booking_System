@@ -180,6 +180,15 @@ export const Footer: React.FC<FooterProps> = ({
               </li>
               <li>
                 <button
+                  id="footer-link-doctor"
+                  onClick={() => onNavigate('doctor')}
+                  className="hover:text-teal-400 text-teal-300/80 font-medium transition-colors hover:underline cursor-pointer flex items-center gap-1.5"
+                >
+                  <span>Doctor Portal</span>
+                </button>
+              </li>
+              <li>
+                <button
                   id="footer-link-admin"
                   onClick={() => onNavigate('admin')}
                   className="hover:text-amber-400 text-amber-300/80 font-medium transition-colors hover:underline cursor-pointer flex items-center gap-1.5"

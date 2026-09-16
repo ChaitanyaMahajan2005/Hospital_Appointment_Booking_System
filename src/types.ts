@@ -1,4 +1,6 @@
-export type Page = 'home' | 'about' | 'departments' | 'doctors' | 'book-appointment' | 'admin';
+export type Page = 'home' | 'about' | 'departments' | 'doctors' | 'book-appointment' | 'admin' | 'doctor';
+
+export type UserRole = 'patient' | 'doctor' | 'admin';
 
 export interface Department {
   id: string;
@@ -19,6 +21,7 @@ export interface Department {
 
 export interface Doctor {
   id: string;
+  uid?: string; // Associated Firebase Auth UID for doctor login
   name: string;
   title: string;
   departmentId: string;
@@ -39,6 +42,9 @@ export interface Doctor {
   photoUrl: string;
   bio: string;
   roomLocation: string;
+  email?: string;
+  phone?: string;
+  status?: 'active' | 'inactive';
 }
 
 export interface UserProfile {
@@ -46,8 +52,14 @@ export interface UserProfile {
   displayName: string;
   email: string;
   phone?: string;
+  role?: UserRole;
+  doctorId?: string; // If role === 'doctor'
+  specialization?: string;
+  status?: 'active' | 'inactive';
   createdAt: string;
 }
+
+export type AppointmentStatus = 'Pending' | 'Confirmed' | 'Completed' | 'Cancelled' | 'Rejected';
 
 export interface Appointment {
   id: string;
@@ -66,9 +78,10 @@ export interface Appointment {
   appointmentTime: string;
   visitType: 'New Consultation' | 'Follow-up' | 'Second Opinion' | 'Routine Health Check';
   symptoms?: string;
-  status: 'Confirmed' | 'Completed' | 'Cancelled';
+  status: AppointmentStatus;
   createdAt: string;
   tokenNumber: string;
+  updatedAt?: string;
 }
 
 export interface Testimonial {

@@ -2,16 +2,42 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "Registered patient user profile",
+      "description": "User profile with role-based access",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "description": "Firebase Auth UID" },
-        "displayName": { "type": "string", "description": "Patient full name" },
-        "email": { "type": "string", "description": "Patient email address" },
-        "phone": { "type": "string", "description": "Patient contact number" },
+        "displayName": { "type": "string", "description": "User full name" },
+        "email": { "type": "string", "description": "User email address" },
+        "phone": { "type": "string", "description": "User contact number" },
+        "role": { "type": "string", "enum": ["patient", "doctor", "admin"], "description": "Access role" },
+        "doctorId": { "type": "string", "description": "Associated Doctor ID if role is doctor" },
+        "specialization": { "type": "string", "description": "Doctor specialty if role is doctor" },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Account status" },
         "createdAt": { "type": "string", "description": "Account registration timestamp" }
       },
       "required": ["uid", "email"]
+    },
+    "Doctor": {
+      "title": "Doctor",
+      "description": "Hospital medical doctor profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Doctor ID" },
+        "uid": { "type": "string", "description": "Linked Firebase Auth UID" },
+        "name": { "type": "string", "description": "Doctor name" },
+        "title": { "type": "string", "description": "Designation/Title" },
+        "email": { "type": "string", "description": "Doctor email address" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "departmentId": { "type": "string", "description": "Clinical department ID" },
+        "departmentName": { "type": "string", "description": "Clinical department name" },
+        "specialty": { "type": "string", "description": "Medical specialty" },
+        "experienceYears": { "type": "number", "description": "Years of medical practice" },
+        "qualification": { "type": "string", "description": "Medical qualification/degree" },
+        "status": { "type": "string", "enum": ["active", "inactive"], "description": "Availability status" },
+        "roomLocation": { "type": "string", "description": "OPD consultation room/chamber" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "name", "departmentId", "specialty"]
     },
     "Appointment": {
       "title": "Appointment",
@@ -34,7 +60,7 @@
         "appointmentTime": { "type": "string", "description": "Appointment time slot" },
         "visitType": { "type": "string", "description": "Type of hospital consultation" },
         "symptoms": { "type": "string", "description": "Patient symptoms or reason for visit" },
-        "status": { "type": "string", "enum": ["Confirmed", "Completed", "Cancelled"] },
+        "status": { "type": "string", "enum": ["Pending", "Confirmed", "Completed", "Cancelled", "Rejected"] },
         "createdAt": { "type": "string", "description": "Booking creation ISO timestamp" },
         "tokenNumber": { "type": "string", "description": "Queue token number" }
       },
@@ -56,6 +82,10 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/User" },
       "description": "User profile collection"
+    },
+    "/doctors/{doctorId}": {
+      "schema": { "$ref": "#/entities/Doctor" },
+      "description": "Doctor directory and profiles collection"
     },
     "/appointments/{appointmentId}": {
       "schema": { "$ref": "#/entities/Appointment" },
